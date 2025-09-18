@@ -1,0 +1,243 @@
+import java.awt.*;
+import java.awt.datatransfer.*;
+import java.awt.event.*;
+import java.io.*;
+
+public class AWTTextEditor extends Frame implements ActionListener {
+    TextArea textArea;
+    String filename = null;
+    FileDialog openDialog, saveDialog;
+    Clipboard clipboard;
+
+    public AWTTextEditor() {
+        setTitle("AWT Text Editor");
+
+        textArea = new TextArea();
+        add(textArea);
+
+        MenuBar menuBar = new MenuBar();
+        setMenuBar(menuBar);
+
+        Menu file = new Menu("File");
+        Menu edit = new Menu("Edit");
+
+        menuBar.add(file);
+        menuBar.add(edit);
+
+        addMenuItem(file, "New");
+        addMenuItem(file, "Open");
+        addMenuItem(file, "Save");
+        addMenuItem(file, "Save As");
+        addMenuItem(file, "Page Setup");
+        addMenuItem(file, "Print");
+        file.addSeparator();
+        addMenuItem(file, "Exit");
+
+        addMenuItem(edit, "Delete");
+        addMenuItem(edit, "Cut");
+        addMenuItem(edit, "Copy");
+        addMenuItem(edit, "Paste");
+        addMenuItem(edit, "Find Next");
+        addMenuItem(edit, "Replace");
+        addMenuItem(edit, "Go To");
+        addMenuItem(edit, "Select All");
+
+        openDialog = new FileDialog(this, "Open", FileDialog.LOAD);
+        saveDialog = new FileDialog(this, "Save", FileDialog.SAVE);
+
+        clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+
+        setSize(600, 500);
+        setVisible(true);
+
+        addWindowListener(new WindowAdapter() {
+            public void windowClosing(WindowEvent we) {
+                System.exit(0);
+            }
+        });
+    }
+
+    void addMenuItem(Menu menu, String name) {
+        MenuItem item = new MenuItem(name);
+        item.addActionListener(this);
+        menu.add(item);
+    }
+
+    public void actionPerformed(ActionEvent e) {
+        String command = e.getActionCommand();
+        switch (command) {
+            case "New":
+                textArea.setText("");
+                filename = null;
+                break;
+
+            case "Open":
+                openDialog.setVisible(true);
+                String openFile = openDialog.getDirectory() + openDialog.getFile();
+                if (openFile != null) {
+                    try (BufferedReader reader = new BufferedReader(new FileReader(openFile))) {
+                        textArea.setText("");
+                        String line;
+                        while ((line = reader.readLine()) != null)
+                            textArea.append(line + "\n");
+                        filename = openFile;
+                    } catch (IOException ex) {
+                        showMessage("Error Opening File!");
+                    }
+                }
+                break;
+
+            case "Save":
+                if (filename == null) {
+                    saveAs();
+                } else {
+                    saveFile(filename);
+                }
+                break;
+
+            case "Save As":
+                saveAs();
+                break;
+
+            case "Page Setup":
+                showMessage("Page Setup not available in AWT.");
+                break;
+
+            case "Print":
+                showMessage("Printing not supported directly in AWT.");
+                break;
+
+            case "Exit":
+                System.exit(0);
+                break;
+
+            case "Delete":
+                textArea.replaceRange("", textArea.getSelectionStart(), textArea.getSelectionEnd());
+                break;
+
+            case "Cut":
+                String cutText = textArea.getSelectedText();
+                if (cutText != null) {
+                    clipboard.setContents(new StringSelection(cutText), null);
+                textArea.replaceRange("", textArea.getSelectionStart(), textArea.getSelectionEnd());
+                }
+                break;
+
+            case "Copy":
+                String copyText = textArea.getSelectedText();
+                if (copyText != null) {
+                    clipboard.setContents(new StringSelection(copyText), null);
+                }
+                break;
+
+            case "Paste":
+                try {
+                    Transferable t = clipboard.getContents(this);
+                    if (t != null && t.isDataFlavorSupported(DataFlavor.stringFlavor)) {
+                        String pasteText = (String) t.getTransferData(DataFlavor.stringFlavor);
+                        textArea.insert(pasteText, textArea.getCaretPosition());
+                    }
+                } catch (Throwable ex) {
+                    showMessage("Paste error!");
+                }
+                break;
+
+            case "Find Next":
+                String search = showInput("Enter word to find:");
+                String content = textArea.getText();
+                int index = content.indexOf(search, textArea.getCaretPosition());
+                if (index >= 0) {
+                    textArea.select(index, index + search.length());
+                } else {
+                    showMessage("Text not found!");
+                }
+                break;
+            case "Replace":
+                String findText = showInput("Find:");
+                String replaceText = showInput("Replace with:");
+                textArea.setText(textArea.getText().replaceFirst(findText, replaceText));
+                break;
+
+            case "Go To":
+                try {
+                    int line = Integer.parseInt(showInput("Enter line number:")) - 1;
+                    String[] lines = textArea.getText().split("\n");
+                    int pos = 0;
+                    for (int i = 0; i < line && i < lines.length; i++) {
+                        pos += lines[i].length() + 1;
+                    }
+                    textArea.setCaretPosition(pos);
+                } catch (Throwable ex) {
+                    showMessage("Invalid line number.");
+                }
+                break;
+
+            case "Select All":
+                textArea.select(0, textArea.getText().length());
+                break;
+        }
+    }
+
+    void saveAs() {
+        saveDialog.setVisible(true);
+        String saveFile = saveDialog.getDirectory() + saveDialog.getFile();
+        if (saveFile != null) {
+            saveFile(saveFile);
+            filename = saveFile;
+        }
+    }
+
+    void saveFile(String path) {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(path))) {
+            writer.write(textArea.getText());
+        } catch (IOException ex) {
+            showMessage("Error Saving File!");
+        }
+    }
+
+    void showMessage(String message) {
+        Dialog dialog = new Dialog(this, "Message", true);
+        dialog.setLayout(new FlowLayout());
+        dialog.add(new Label(message));
+        Button ok = new Button("OK");
+        ok.addActionListener(e -> dialog.setVisible(false));
+        dialog.add(ok);
+        dialog.setSize(300, 100);
+        dialog.setVisible(true);
+    }
+
+    String showInput(String prompt) {
+        TextInputDialog inputDialog = new TextInputDialog(this, prompt);
+        return inputDialog.getInput();
+    }
+
+    public static void main(String[] args) {
+        new AWTTextEditor();
+    }
+}
+
+// Input dialog for prompts
+class TextInputDialog extends Dialog {
+    String input = "";
+    TextField textField;
+
+    TextInputDialog(Frame parent, String prompt) {
+        super(parent, "Input", true);
+        setLayout(new FlowLayout());
+        add(new Label(prompt));
+        textField = new TextField(20);
+        add(textField);
+        Button ok = new Button("OK");
+        ok.addActionListener(e -> {
+            input = textField.getText();
+            setVisible(false);
+        });
+        add(ok);
+        setSize(300, 120);
+        setVisible(true);
+    }
+
+    String getInput() {
+        return input;
+    }
+}
